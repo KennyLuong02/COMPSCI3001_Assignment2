@@ -24,7 +24,7 @@
 
 #define RTT  16.0       /* round trip time.  MUST BE SET TO 16.0 when submitting assignment */
 #define WINDOWSIZE 6    /* the maximum number of buffered unacked packet */
-#define SEQSPACE 7      /* the min sequence space for GBN must be at least windowsize + 1 */
+#define SEQSPACE 12      /* the min sequence space for GBN must be at least windowsize + 1 */
                         /* The minimum for selective repeat is WINDOWSIZE * 2*/
 #define NOTINUSE (-1)   /* used to fill header fields that are not being used */
 
@@ -62,6 +62,7 @@ static int windowfirst, windowlast;    /* array indexes of the first/last packet
 static int windowcount;                /* the number of packets currently awaiting an ACK */
 static int A_nextseqnum;               /* the next sequence number to be used by the sender */
 int ACKarray[WINDOWSIZE];
+int send_base;
 
 /* called from layer 5 (application layer), passed the message to be sent to other side */
 /*message is a structure containing data to be sent to B. This routine will be called 
@@ -93,13 +94,16 @@ void A_output(struct msg message)
 
 
 
-    /*//////////////////////////// Not sure about this bit*/
+    /*//////////////////////////// Not sure about this bit
+    Done*/
 
     /* put packet in window buffer */
     /* windowlast will always be 0 for alternating bit; but not for GoBackN */
     /*windowlast = (windowlast + 1) % WINDOWSIZE;*/
-    windowlast = 0;
-    buffer[windowlast] = sendpkt;
+    /*To add the packet into the buffer and ACKarray to keep track
+    of the ACK*/
+    buffer[A_nextseqnum % WINDOWSIZE] = sendpkt;
+    ACKarray[A_nextseqnum % WINDOWSIZE] = 0;
     windowcount++;
 
     /*////////////////////////////////////////
@@ -133,7 +137,7 @@ void A_output(struct msg message)
 
 
   }
-  /* if blocked,  window is full */
+  /* if blocked,  window is full*/
   /*// Keep this the same*/
   else {
     if (TRACE > 0)
@@ -168,7 +172,16 @@ void A_input(struct pkt packet)
 
 
     total_ACKs_received++; /*Not sure about this*/
+    
+    int ACKnum = packet.acknum;
 
+    /*Check if this ACK is within window range*/
+    if ((send_base <= ACKnum && ACKnum < send_base + WINDOWSIZE) ||
+    ((send_base + WINDOWSIZE >= SEQSPACE) && (ACKnum < (send_base + WINDOWSIZE) % SEQSPACE))) {
+      if (ACKarray[ACKnum] == 0) {
+        ACKarray[ACKnum] = 1;
+      }
+    }
 
 
     /* check if new ACK or duplicate */
@@ -210,7 +223,11 @@ void A_input(struct pkt packet)
               if (ACKarray[i] == 1) {
 
                 /* slide window until the last packet ACKed */
-                windowfirst = (windowfirst + 1) % WINDOWSIZE;
+                /*windowfirst = (windowfirst + 1) % WINDOWSIZE;*/
+                
+                /* Move the buffer forward*/
+                buffer[i] = buffer[i+1];
+
                 
                 /* delete the acked packets from window buffer */
                 windowcount--;
@@ -228,13 +245,22 @@ void A_input(struct pkt packet)
               }
             }
 
+
+            /*If the window moves and there are unstranmitted packets with sequence numbers that are now fall
+            into the window these packets are transmitted
+            This has not been implemented in GobackN*/
+
+
+
+
+
+
+
             /*if (ACKflag == 1) {*/
               /*Then move the window*/
               /* slide window by the number of packets ACKed */
               /*windowfirst = (windowfirst + packet.acknum) % WINDOWSIZE;
             }*/
-	    
-
             /* delete the acked packets from window buffer */
             /*for (i=0; i<packet.acknum; i++)
               windowcount--; How many packets awaiting ACK*/
@@ -274,7 +300,7 @@ void A_timerinterrupt(void)
     printf("----A: time out,resend packets!\n");
 
     /*Gotta fix this for Selective repeat, only sends the unACKed ones
-    Done*/
+    No, only send the packet that is timeout, not all unACKed packets*/
 
   for(i=0; i<WINDOWSIZE; i++) {
     if (ACKarray[i]==0)  {/*Only send the packet that is not ACKed*/
@@ -312,6 +338,8 @@ void A_init(void)
 		     so initially this is set to -1
 		   */
   windowcount = 0;
+
+  send_base = 0;
   
   for (i = 0; i< WINDOWSIZE; i++) {
     ACKarray[i] = 0; /*This array is used for keeping track of al the ACKs
@@ -327,47 +355,119 @@ void A_init(void)
 static int expectedseqnum; /* the sequence number expected next by the receiver */
 static int B_nextseqnum;   /* the sequence number for the next packets sent by B */
 
+static struct pkt buffer_for_B[WINDOWSIZE+1];  /* array for storing packets waiting for ACK */
+int ACKarray_for_B[WINDOWSIZE];
+
+
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 /*This routine will be called whenever a packet sent from A 
 (i.e., as a result of a  tolayer3() being called by a A-side procedure) 
-arrives at B. The packet is the (possibly corrupted) packet sent from A. */
+arrives at B. The packet is the (possibly corrupted) packet sent from A. 
+
+It is important to note that in Step 2 in Figure 3.25, the receiver reacknowledges
+(rather than ignores) already received packets with certain sequence numbers below
+the current window base.*/
 void B_input(struct pkt packet)
 {
   struct pkt sendpkt;
   int i;
 
-  /* if not corrupted and received packet is in order */
+  /* if not corrupted and received packet is in order 
+  The SR receiver will acknowledge a correctly received packet whether or not it is in
+  order. Out-of-order packets are buffered until any missing packets (that is, 
+  packets with lower sequence numbers) are received, at which point a batch of 
+  packets can be delivered in order to the upper layer.*/
+  
+  /*Save the packet straight into the array,
+  then if the packet is in order, send it straight to layer 5,
+  if it is out of order, then save it in its place in the array,
+  then check the flag for the ACK, and only send the all to layer 5
+  when receives the previous packets*/
+
+  buffer_for_B[packet.seqnum - expectedseqnum] = packet; /*Save the packet into the buffer*/
+  ACKarray_for_B[packet.seqnum - expectedseqnum] = 1;
+  
   if  ( (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) ) {
     if (TRACE > 0)
       printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
     packets_received++;
 
-    /* deliver to receiving application */
-    tolayer5(B, packet.payload); /*This is to layer 5*/
+    /* Send all the packets that are in order*/
+    for (i = 0; i<WINDOWSIZE; i++) {
+      /*If the packet is ACKed*/
+      if (ACKarray_for_B[i] == 1) {
+
+        /* deliver to receiving application */
+        tolayer5(B, buffer_for_B[i].payload); /*This is to layer 5*/
+
+        /* Move the buffer forward*/
+        buffer_for_B[i] = buffer_for_B[i+1];
+        
+        
+        /* Move the ACKarray forward*/
+        if ((i+1) == WINDOWSIZE) {
+          ACKarray_for_B[i] = 0;
+        } else {
+          ACKarray_for_B[i] = ACKarray_for_B[i+1];
+        }
+
+      } else if (ACKarray_for_B[i] == 0) {
+        /*If the packet is not ACKed*/
+        break;
+      }
+    }
+
+
 
     /* send an ACK for the received packet */
     sendpkt.acknum = expectedseqnum;
 
     /* update state variables */
-    expectedseqnum = (expectedseqnum + 1) % SEQSPACE;        
+    expectedseqnum = (expectedseqnum + 1) % SEQSPACE; ???
   }
-  else {
-    /* packet is corrupted or out of order resend last ACK */
-    if (TRACE > 0) 
+  else if ((IsCorrupted(packet))){
+    /* packet is corrupted or out of order resend last ACK
+    
+    But if the packet is corrupted, do nothing*/
+    /*if (TRACE > 0) 
       printf("----B: packet corrupted or not expected sequence number, resend ACK!\n");
+    if (expectedseqnum == 0) /*If the next expected sequence number is 0,
+                             //it is relooped and send 6*/
+    /*  sendpkt.acknum = SEQSPACE - 1;
+    else
+    /* If it is not 0, then just send the last ACK*/
+    /*  sendpkt.acknum = expectedseqnum - 1;*/
+
+    if (TRACE > 0) 
+      printf("----B: packet corrupted, do nothing!\n");
+    
+  } else {
+    /*Else if the packet is out of order
+    if it is out of order, then save it in its place in the array,
+    then check the flag for the ACK, and only send the all to layer 5
+    when receives the previous packets*/
+
+
+    
+    
     if (expectedseqnum == 0) /*If the next expected sequence number is 0,
                              //it is relooped and send 6*/
       sendpkt.acknum = SEQSPACE - 1;
     else
     /* If it is not 0, then just send the last ACK*/
       sendpkt.acknum = expectedseqnum - 1;
+
+    A_nextseqnum = (A_nextseqnum + 1) % SEQSPACE;
   }
 
   /* create packet */
   sendpkt.seqnum = B_nextseqnum;
   B_nextseqnum = (B_nextseqnum + 1) % 2;
-    
+
+
+  
+  /*Keep this*/
   /* we don't have any data to send.  fill payload with 0's */
   for ( i=0; i<20 ; i++ ) 
     sendpkt.payload[i] = '0';  
@@ -383,8 +483,14 @@ void B_input(struct pkt packet)
 /* entity B routines are called. You can use it to do any initialization */
 void B_init(void)
 {
+  int i;
   expectedseqnum = 0;
   B_nextseqnum = 1;
+
+  for (i = 0; i< WINDOWSIZE; i++) {
+    ACKarray_for_B[i] = 0; /*This array is used for keeping track of al the ACKs
+                                    0: is not ACKed and 1: is ACKed*/
+  }
 }
 
 /******************************************************************************
