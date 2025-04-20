@@ -57,11 +57,11 @@ bool IsCorrupted(struct pkt packet)
 
 /********* Sender (A) variables and functions ************/
 
-static struct pkt buffer[WINDOWSIZE];  /* array for storing packets waiting for ACK */
+static struct pkt buffer[SEQSPACE];  /* array for storing packets waiting for ACK */
 static int windowfirst, windowlast;    /* array indexes of the first/last packet awaiting ACK */
 static int windowcount;                /* the number of packets currently awaiting an ACK */
 static int A_nextseqnum;               /* the next sequence number to be used by the sender */
-int ACKarray[WINDOWSIZE];
+int ACKarray[SEQSPACE];
 int send_base;
 
 /* called from layer 5 (application layer), passed the message to be sent to other side */
@@ -174,77 +174,51 @@ void A_input(struct pkt packet)
     total_ACKs_received++; /*Not sure about this*/
     
     int ACKnum = packet.acknum;
-
-    /*Check if this ACK is within window range*/
-    if ((send_base <= ACKnum && ACKnum < send_base + WINDOWSIZE) ||
-    ((send_base + WINDOWSIZE >= SEQSPACE) && (ACKnum < (send_base + WINDOWSIZE) % SEQSPACE))) {
-      if (ACKarray[ACKnum] == 0) {
-        ACKarray[ACKnum] = 1;
-      }
-    }
-
+    int seqlast = (send_base + WINDOWSIZE - 1) % SEQSPACE;
 
     /* check if new ACK or duplicate */
     if (windowcount != 0) { /*If there are still packets awaiting ACK*/
 
-          int seqfirst = buffer[windowfirst].seqnum;
-          int seqlast = buffer[windowlast].seqnum;
-          /* check case when seqnum has and hasn't wrapped */
-          if (((seqfirst <= seqlast) && (packet.acknum >= seqfirst && packet.acknum <= seqlast)) ||
-              ((seqfirst > seqlast) && (packet.acknum >= seqfirst || packet.acknum <= seqlast))) {
+       /* check case when seqnum has and hasn't wrapped */
+      if (((send_base <= seqlast) && (packet.acknum >= send_base && packet.acknum <= seqlast)) ||
+      ((send_base > seqlast) && (packet.acknum >= send_base || packet.acknum <= seqlast))) {
+        if (ACKarray[ACKnum] == 0) {
+          /*If the ACK is new*/
+          /* packet is a new ACK */
+          if (TRACE > 0) {
+            printf("----A: ACK %d is not a duplicate\n",packet.acknum);
+          }
+          new_ACKs++; /*This is for the final result so keep  it*/
 
-            /* packet is a new ACK */
-            if (TRACE > 0)
-              printf("----A: ACK %d is not a duplicate\n",packet.acknum);
-            new_ACKs++; /*This is for the final result so keep  it
+          /*To turn the bit in the ACKarray for that packet to 1*/
+          ACKarray[ACKnum] = 1;
 
+          
 
-            ////////////////////// Not sure about this
-
-            // Does Selective repeat requires cumulative ACKs?
-            Can comment this out but it does not do anything so ignore it*/
-
-            /* cumulative acknowledgement - determine how many packets are ACKed */
-            if (packet.acknum >= seqfirst) /*???*/
-              ackcount = packet.acknum + 1 - seqfirst;
-            else
-              ackcount = SEQSPACE - seqfirst + packet.acknum;
+          /*////////////////////Need to redo the timer*/
+          /*// Implement 1 timer for multiples*/
+          stoptimer(A);
+          if (windowcount > 0)
+            starttimer(A, RTT);
+          
+          /*///////////////////////////*/
 
 
 
-            /*To turn the bit in the ACKarray for that packet to 1*/
-            ACKarray[packet.acknum] = 1;
+          /* delete the acked packets from windowcount */
+          windowcount--;
+          
+          /*This is to move the send_base forward for all the ACKed*/
+          while (ACKarray[send_base] == 1) {
+            /*Reset the ACK value to 0*/
+            ACKarray[send_base] = 0;
+            /*Increment the send_base*/
+            send_base = (send_base + 1) % SEQSPACE;
+          }
 
-            /* Instead of slide window equating the number of ACKs have received,
-            //in Selective repeat, the window only slides to the correctly
-            //ordered ACKed*/
-            for (i = 0; i<WINDOWSIZE; i++) {
-              /*If the packet is ACKed*/
-              if (ACKarray[i] == 1) {
-
-                /* slide window until the last packet ACKed */
-                /*windowfirst = (windowfirst + 1) % WINDOWSIZE;*/
-                
-                /* Move the buffer forward*/
-                buffer[i] = buffer[i+1];
-
-                
-                /* delete the acked packets from window buffer */
-                windowcount--;
-                
-                /* Move the ACKarray forward*/
-                if ((i+1) == WINDOWSIZE) {
-                  ACKarray[i] = 0;
-                } else {
-                  ACKarray[i] = ACKarray[i+1];
-                }
-
-              } else if (ACKarray[i] == 0) {
-                /*If the packet is not ACKed*/
-                break;
-              }
-            }
-
+        }
+      }
+    }
 
             /*If the window moves and there are unstranmitted packets with sequence numbers that are now fall
             into the window these packets are transmitted
@@ -252,35 +226,10 @@ void A_input(struct pkt packet)
 
 
 
-
-
-
-
-            /*if (ACKflag == 1) {*/
-              /*Then move the window*/
-              /* slide window by the number of packets ACKed */
-              /*windowfirst = (windowfirst + packet.acknum) % WINDOWSIZE;
-            }*/
-            /* delete the acked packets from window buffer */
-            /*for (i=0; i<packet.acknum; i++)
-              windowcount--; How many packets awaiting ACK*/
-
-            
-            /*// Implement 1 timer for multiples*/
-	    /* start timer again if there are still more unacked packets in window */
-            stoptimer(A);
-            if (windowcount > 0)
-              starttimer(A, RTT);
-
-          }
-        }
-        
-        /*//////////////////////////////////
-
         // Keep this*/
-        else
-          if (TRACE > 0)
-        printf ("----A: duplicate ACK received, do nothing!\n");
+      else
+        if (TRACE > 0)
+      printf ("----A: duplicate ACK received, do nothing!\n");
   }
   else 
     if (TRACE > 0)
