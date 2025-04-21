@@ -162,7 +162,8 @@ void A_output(struct msg message)
 arrives at A. packet is the (possibly corrupted) packet sent from B.*/
 void A_input(struct pkt packet)
 { /*//This is for A receiving a packet from B*/
-  int i;
+  int ACKnum = packet.acknum;
+  int seqlast = (send_base + WINDOWSIZE - 1) % SEQSPACE;
 
   /*//If an ACK is received, the SR sender marks that packet as having been received,
   //provided it is in the window. If the packet’s sequence number is equal to send_
@@ -179,9 +180,6 @@ void A_input(struct pkt packet)
 
     total_ACKs_received++; /*Not sure about this*/
     
-    int ACKnum = packet.acknum;
-    int seqlast = (send_base + WINDOWSIZE - 1) % SEQSPACE;
-
     /* check if new ACK or duplicate */
     if (windowcount != 0) { /*If there are still packets awaiting ACK*/
 
@@ -232,7 +230,7 @@ void A_input(struct pkt packet)
 
 
 
-        // Keep this*/
+        /*// Keep this*/
       else
         if (TRACE > 0)
       printf ("----A: duplicate ACK received, do nothing!\n");
@@ -341,7 +339,7 @@ void B_input(struct pkt packet)
   then check the flag for the ACK, and only send the all to layer 5
   when receives the previous packets*/
 
-  /*buffer_for_B[packet.seqnum - expectedseqnum] = packet; /*Save the packet into the buffer
+  /*buffer_for_B[packet.seqnum - expectedseqnum] = packet; Save the packet into the buffer
   ACKarray_for_B[packet.seqnum - expectedseqnum] = 1;*/
 
   /*This is to get the lower bound of the possible duplicate packet
@@ -396,11 +394,11 @@ void B_input(struct pkt packet)
     But if the packet is corrupted, do nothing*/
     /*if (TRACE > 0) 
       printf("----B: packet corrupted or not expected sequence number, resend ACK!\n");
-    if (expectedseqnum == 0) /*If the next expected sequence number is 0,
+    if (expectedseqnum == 0) If the next expected sequence number is 0,
                              //it is relooped and send 6*/
     /*  sendpkt.acknum = SEQSPACE - 1;
     else
-    /* If it is not 0, then just send the last ACK*/
+     If it is not 0, then just send the last ACK*/
     /*  sendpkt.acknum = expectedseqnum - 1;*/
 
     if (TRACE > 0) 
