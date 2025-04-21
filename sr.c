@@ -362,7 +362,7 @@ void B_input(struct pkt packet)
     if (((expectedseqnum <= seqlast) && (packet.seqnum >= expectedseqnum && packet.seqnum <= seqlast)) ||
       ((expectedseqnum > seqlast) && (packet.seqnum >= expectedseqnum || packet.seqnum <= seqlast))) {
         if (TRACE > 0) {
-          printf("----B: packet %d is received, send ACK!\n",packet.seqnum);
+          printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
         }
 
         /*If the packet is new*/
@@ -406,7 +406,7 @@ void B_input(struct pkt packet)
      If it is not 0, then just send the last ACK*/
     /*  sendpkt.acknum = expectedseqnum - 1;*/
 
-    if (TRACE > 0) 
+    if (TRACE == 1) 
       printf("----B: packet is a duplicate, resend ACK!\n");
     
     /* send an ACK for the received packet */
@@ -415,7 +415,7 @@ void B_input(struct pkt packet)
     
   } else if ((IsCorrupted(packet))) {
     /*Else if the packet is corrupted, then do nothing*/
-    if (TRACE > 0) 
+    if (TRACE == 1) 
       printf("----B: packet corrupted, do nothing!\n");
     
     return;
