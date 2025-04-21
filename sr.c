@@ -202,8 +202,9 @@ void A_input(struct pkt packet)
           /*////////////////////Need to redo the timer*/
           /*// Implement 1 timer for multiples*/
           stoptimer(A);
-          if (windowcount > 0)
+          /*if (windowcount > 0)
             starttimer(A, RTT);
+            */
           
           /*///////////////////////////*/
 
@@ -247,7 +248,7 @@ void A_input(struct pkt packet)
  below for how the timer is started and stopped.*/
 void A_timerinterrupt(void)
 {
-  int i;
+  /*int i;*/
 
   if (TRACE > 0)
     printf("----A: time out,resend packets!\n");
@@ -255,24 +256,27 @@ void A_timerinterrupt(void)
     /*Gotta fix this for Selective repeat, only sends the unACKed ones
     No, only send the packet that is timeout, not all unACKed packets*/
 
-  for(i=0; i<WINDOWSIZE; i++) {
-    if (ACKarray[i]==0)  {/*Only send the packet that is not ACKed*/
+  /*for(i=0; i<WINDOWSIZE; i++) {
+    if (ACKarray[i]==0)  {*/ /*Only send the packet that is not ACKed*/
 
-      if (TRACE > 0)
+      /*if (TRACE > 0)
         printf ("---A: resending packet %d\n", (buffer[(windowfirst+i) % WINDOWSIZE]).seqnum);
 
-      tolayer3(A,buffer[(windowfirst+i) % WINDOWSIZE]); /*Buffer is the array that has the
-                                                        //packets waiting for ACKs*/
+      tolayer3(A,buffer[(windowfirst+i) % WINDOWSIZE]); 
+      */
       
       /*/////////////////////////////////Not sure about this*/
       packets_resent++;
       
-      if (i==0) starttimer(A,RTT); /*Need to redo this timer probably*/
+      /*if (i==0) starttimer(A,RTT); 
+      }*/
 
       /*///////////////////////////////////////////*/
 
-    }
-  }
+      if (TRACE > 0)
+        printf ("---A: resending packet %d\n", (buffer[send_base].seqnum));
+
+      tolayer3(A,buffer[send_base]);
 }       
 
 
@@ -357,8 +361,9 @@ void B_input(struct pkt packet)
     /*Check if the packet is within the window, and for the wrap around*/
     if (((expectedseqnum <= seqlast) && (packet.seqnum >= expectedseqnum && packet.seqnum <= seqlast)) ||
       ((expectedseqnum > seqlast) && (packet.seqnum >= expectedseqnum || packet.seqnum <= seqlast))) {
-        if (TRACE > 0)
+        if (TRACE > 0) {
           printf("----B: packet %d is received, send ACK!\n",packet.seqnum);
+        }
 
         /*If the packet is new*/
         if (ACKarray_for_B[SEQnum] == 0) {
@@ -383,7 +388,7 @@ void B_input(struct pkt packet)
           packets_received++;
         }
 
-      }
+      
 
       /* send an ACK for the received packet */
       sendpkt.acknum = packet.seqnum;
@@ -406,6 +411,7 @@ void B_input(struct pkt packet)
     
     /* send an ACK for the received packet */
     sendpkt.acknum = packet.seqnum;
+    }
     
   } else if ((IsCorrupted(packet))) {
     /*Else if the packet is corrupted, then do nothing*/
