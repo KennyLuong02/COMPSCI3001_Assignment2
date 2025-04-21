@@ -68,8 +68,8 @@ static struct pkt buffer[SEQSPACE];  /* array for storing packets waiting for AC
 static int windowfirst, windowlast;    /* array indexes of the first/last packet awaiting ACK */
 static int windowcount;                /* the number of packets currently awaiting an ACK */
 static int A_nextseqnum;               /* the next sequence number to be used by the sender */
-int ACKarray[SEQSPACE];
-int send_base;
+static int ACKarray[SEQSPACE];
+static int send_base;
 
 /* called from layer 5 (application layer), passed the message to be sent to other side */
 /*message is a structure containing data to be sent to B. This routine will be called 
@@ -127,9 +127,12 @@ void A_output(struct msg message)
     /*////////////////////// Not sure about this bit
     // May need different timer, or use 1 timer as multiples*/
 
-    /* start timer if first packet in window */
-    if (windowcount == 1)
+    /* start timer if it is the send_base packet */
+    if (sendpkt.seqnum == send_base) {
       starttimer(A,RTT);
+    }
+    /*if (windowcount == 1)
+      starttimer(A,RTT);*/
 
     /*///////////////////////////////////*/
 
@@ -194,6 +197,9 @@ void A_input(struct pkt packet)
           }
           new_ACKs++; /*This is for the final result so keep  it*/
 
+          /*Stop the timer anyway to give the packet more time to ACK*/
+          stoptimer(A);
+
           /*To turn the bit in the ACKarray for that packet to 1*/
           ACKarray[ACKnum] = 1;
 
@@ -201,7 +207,7 @@ void A_input(struct pkt packet)
 
           /*////////////////////Need to redo the timer*/
           /*// Implement 1 timer for multiples*/
-          stoptimer(A);
+          /*stoptimer(A);*/
           /*if (windowcount > 0)
             starttimer(A, RTT);
             */
@@ -219,6 +225,12 @@ void A_input(struct pkt packet)
             ACKarray[send_base] = 0;
             /*Increment the send_base*/
             send_base = (send_base + 1) % SEQSPACE;
+          }
+          
+          if (A_nextseqnum == send_base) {
+            /*If they are not equal, keep timing the send_base packet*/
+            starttimer(A,RTT);
+
           }
 
         }
@@ -250,8 +262,9 @@ void A_timerinterrupt(void)
 {
   /*int i;*/
 
-  if (TRACE > 0)
+  if (TRACE > 0) {
     printf("----A: time out,resend packets!\n");
+  }
 
     /*Gotta fix this for Selective repeat, only sends the unACKed ones
     No, only send the packet that is timeout, not all unACKed packets*/
@@ -273,11 +286,18 @@ void A_timerinterrupt(void)
 
       /*///////////////////////////////////////////*/
 
-      if (TRACE > 0)
+      if (TRACE > 0) {
         printf ("---A: resending packet %d\n", (buffer[send_base].seqnum));
+      }
 
       tolayer3(A,buffer[send_base]);
-}       
+      /*stoptimer(A);*/
+
+    /* Start the timer if the the send_base is not the same as A_nextseqnum */
+    if (send_base != A_nextseqnum) {
+      starttimer(A,RTT);
+    }
+}
 
 
 
@@ -313,7 +333,7 @@ static int expectedseqnum; /* the sequence number expected next by the receiver 
 static int B_nextseqnum;   /* the sequence number for the next packets sent by B */
 
 static struct pkt buffer_for_B[SEQSPACE];  /* array for storing packets waiting for ACK */
-int ACKarray_for_B[SEQSPACE];
+static int ACKarray_for_B[SEQSPACE];
 
 
 
