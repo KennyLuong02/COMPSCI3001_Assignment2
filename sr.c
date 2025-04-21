@@ -131,8 +131,6 @@ void A_output(struct msg message)
     if (sendpkt.seqnum == send_base) {
       starttimer(A,RTT);
     }
-    /*if (windowcount == 1)
-      starttimer(A,RTT);*/
 
     /*///////////////////////////////////*/
 
@@ -198,7 +196,7 @@ void A_input(struct pkt packet)
           new_ACKs++; /*This is for the final result so keep  it*/
 
           /*Stop the timer anyway to give the packet more time to ACK*/
-          stoptimer(A);
+          /*stoptimer(A);*/
 
           /*To turn the bit in the ACKarray for that packet to 1*/
           ACKarray[ACKnum] = 1;
@@ -208,9 +206,6 @@ void A_input(struct pkt packet)
           /*////////////////////Need to redo the timer*/
           /*// Implement 1 timer for multiples*/
           /*stoptimer(A);*/
-          /*if (windowcount > 0)
-            starttimer(A, RTT);
-            */
           
           /*///////////////////////////*/
 
@@ -227,10 +222,11 @@ void A_input(struct pkt packet)
             send_base = (send_base + 1) % SEQSPACE;
           }
           
-          if (A_nextseqnum == send_base) {
-            /*If they are not equal, keep timing the send_base packet*/
+          /*When the send_base is the same with the A_nextseqnum, this is the last packet*/
+          if (send_base == A_nextseqnum) {
+            stoptimer(A);
+          } else {
             starttimer(A,RTT);
-
           }
 
         }
@@ -280,9 +276,6 @@ void A_timerinterrupt(void)
       
       /*/////////////////////////////////Not sure about this*/
       packets_resent++;
-      
-      /*if (i==0) starttimer(A,RTT); 
-      }*/
 
       /*///////////////////////////////////////////*/
 
