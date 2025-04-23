@@ -109,8 +109,8 @@ void A_output(struct msg message)
     /*windowlast = (windowlast + 1) % WINDOWSIZE;*/
     /*To add the packet into the buffer and ACKarray to keep track
     of the ACK*/
-    buffer[A_nextseqnum % WINDOWSIZE] = sendpkt;
-    ACKarray[A_nextseqnum % WINDOWSIZE] = 0;
+    buffer[A_nextseqnum] = sendpkt;
+    ACKarray[A_nextseqnum] = 0;
     windowcount++;
 
     /*////////////////////////////////////////
@@ -225,13 +225,14 @@ void A_input(struct pkt packet)
           /*When the send_base is the same with the A_nextseqnum, this is the last packet*/
           if (send_base == A_nextseqnum) {
             stoptimer(A);
-          } else {
+          } else if (send_base != A_nextseqnum) {
+            stoptimer(A);
             starttimer(A,RTT);
           }
 
         }
       }
-    }
+    
 
             /*If the window moves and there are unstranmitted packets with sequence numbers that are now fall
             into the window these packets are transmitted
@@ -240,7 +241,7 @@ void A_input(struct pkt packet)
 
 
         /*// Keep this*/
-      else
+      } else
         if (TRACE > 0)
       printf ("----A: duplicate ACK received, do nothing!\n");
   }
