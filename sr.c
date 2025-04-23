@@ -225,10 +225,11 @@ void A_input(struct pkt packet)
           /*When the send_base is the same with the A_nextseqnum, this is the last packet*/
           if (send_base == A_nextseqnum) {
             stoptimer(A);
-          } else if (send_base != A_nextseqnum) {
+          } 
+          /*else if (send_base != A_nextseqnum) {
             stoptimer(A);
             starttimer(A,RTT);
-          }
+          }*/
 
         }
       }
@@ -287,10 +288,8 @@ void A_timerinterrupt(void)
       tolayer3(A,buffer[send_base]);
       /*stoptimer(A);*/
 
-    /* Start the timer if the the send_base is not the same as A_nextseqnum */
-    if (send_base != A_nextseqnum) {
-      starttimer(A,RTT);
-    }
+    /* Start the timer*/
+    starttimer(A,RTT);
 }
 
 
@@ -375,9 +374,10 @@ void B_input(struct pkt packet)
     /*Check if the packet is within the window, and for the wrap around*/
     if (((expectedseqnum <= seqlast) && (packet.seqnum >= expectedseqnum && packet.seqnum <= seqlast)) ||
       ((expectedseqnum > seqlast) && (packet.seqnum >= expectedseqnum || packet.seqnum <= seqlast))) {
-        if (TRACE > 0) {
+        if (TRACE > 0)
           printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
-        }
+        
+        packets_received++;
 
         /*If the packet is new*/
         if (ACKarray_for_B[SEQnum] == 0) {
@@ -399,7 +399,7 @@ void B_input(struct pkt packet)
           expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
 
 
-          packets_received++;
+
         }
 
       
