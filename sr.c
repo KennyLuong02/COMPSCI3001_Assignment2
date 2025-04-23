@@ -225,11 +225,10 @@ void A_input(struct pkt packet)
           /*When the send_base is the same with the A_nextseqnum, this is the last packet*/
           if (send_base == A_nextseqnum) {
             stoptimer(A);
-          } 
-          /*else if (send_base != A_nextseqnum) {
+          } else if (send_base != A_nextseqnum) {
             stoptimer(A);
             starttimer(A,RTT);
-          }*/
+          }
 
         }
       }
@@ -363,32 +362,29 @@ void B_input(struct pkt packet)
   The maths is (expectedseqnum - WINDOWZISE) = (probably get the negative version) of the wrap around
   then use     (expectedseqnum - WINDOWZISE) + SEQSPACE = get the positive version
   then if it overflows, then wrap around with % SEQSPACE*/
-  int lower_duplicate_edge = ((expectedseqnum - WINDOWSIZE) + SEQSPACE) % SEQSPACE;
+  /*int lower_duplicate_edge = ((expectedseqnum - WINDOWSIZE) + SEQSPACE) % SEQSPACE;*/
 
   
   if  (!IsCorrupted(packet)) {
 
     int SEQnum = packet.seqnum;
     int seqlast = (expectedseqnum + WINDOWSIZE - 1) % SEQSPACE;
+    if (TRACE > 0)
+      printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
+    packets_received++;
 
     /*Check if the packet is within the window, and for the wrap around*/
     if (((expectedseqnum <= seqlast) && (packet.seqnum >= expectedseqnum && packet.seqnum <= seqlast)) ||
       ((expectedseqnum > seqlast) && (packet.seqnum >= expectedseqnum || packet.seqnum <= seqlast))) {
-        if (TRACE > 0)
-          printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
-        
-        packets_received++;
 
         /*If the packet is new*/
         if (ACKarray_for_B[SEQnum] == 0) {
           /*Save it into the buffer*/
           buffer_for_B[SEQnum] = packet;
-
           /*Mark it received*/
           ACKarray_for_B[SEQnum] = 1;
         }
 
-          
         /*This is to move the receive_base forward and send all the correctly received packets */
         while (ACKarray_for_B[expectedseqnum] == 1) {
           /*Send the correct packets to layer 5*/
@@ -398,16 +394,12 @@ void B_input(struct pkt packet)
           /*Increment the expectedseqnum*/
           expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
 
-
-
         }
+    }
+    /* send an ACK for the received packet */
+    sendpkt.acknum = packet.seqnum;
 
-      
-
-      /* send an ACK for the received packet */
-      sendpkt.acknum = packet.seqnum;
-
-    } else if ((isInRange(packet.seqnum, lower_duplicate_edge, expectedseqnum))) {
+    /*else if ((isInRange(packet.seqnum, lower_duplicate_edge, expectedseqnum))) {*/
     /* packet is duplicate, resend the ACK
     
     But if the packet is corrupted, do nothing*/
@@ -420,14 +412,14 @@ void B_input(struct pkt packet)
      If it is not 0, then just send the last ACK*/
     /*  sendpkt.acknum = expectedseqnum - 1;*/
 
-    if (TRACE == 1) 
+    /*if (TRACE == 1) 
       printf("----B: packet is a duplicate, resend ACK!\n");
     
-    /* send an ACK for the received packet */
-    sendpkt.acknum = packet.seqnum;
-    }
     
-  } else if ((IsCorrupted(packet))) {
+    sendpkt.acknum = packet.seqnum;
+    }*/
+    
+  } else {
     /*Else if the packet is corrupted, then do nothing*/
     if (TRACE == 1) 
       printf("----B: packet corrupted, do nothing!\n");
